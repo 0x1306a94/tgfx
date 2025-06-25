@@ -23,7 +23,6 @@
 #include "gpu/Texture.h"
 
 namespace tgfx {
-
 static void getPackedGlyphImage(const void* srcPixels, void* dstPixels,
                                 const ImageInfo& srcImageInfo, size_t dstRowBytes) {
   auto srcHeight = srcImageInfo.height();
