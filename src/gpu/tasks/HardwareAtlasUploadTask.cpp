@@ -16,18 +16,32 @@
 //
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "ClearPixels.h"
+#include "HardwareAtlasUploadTask.h"
+#include "tgfx/gpu/Context.h"
 
 namespace tgfx {
-void ClearPixels(const ImageInfo& dstInfo, void* dstPixels) {
-  if (dstInfo.rowBytes() == dstInfo.minRowBytes()) {
-    memset(dstPixels, 0, dstInfo.byteSize());
-    return;
+HardwareAtlasUploadTask::HardwareAtlasUploadTask(
+    UniqueKey uniqueKey, std::vector<std::shared_ptr<Task>> tasks,
+    std::map<std::shared_ptr<PixelBuffer>, std::shared_ptr<TextureProxy>> buffers)
+    : ResourceTask(std::move(uniqueKey)), cellTasks(std::move(tasks)), buffers(std::move(buffers)) {
+}
+
+bool HardwareAtlasUploadTask::execute(Context* context) {
+  for (const auto& task : cellTasks) {
+    task->wait();
   }
-  auto height = static_cast<size_t>(dstInfo.height());
-  for (size_t y = 0; y < height; ++y) {
-    auto row = static_cast<uint8_t*>(dstPixels) + y * dstInfo.rowBytes();
-    memset(row, 0, dstInfo.minRowBytes());
+  for (const auto& [buffer, proxy] : buffers) {
+    buffer->unlockPixels();
+    auto texture = proxy->getTexture();
+    if (texture != nullptr) {
+      continue;
+    }
+    texture = Texture::MakeFrom(context, buffer);
+    if (texture == nullptr) {
+      continue;
+    }
+    texture->assignUniqueKey(proxy->getUniqueKey());
   }
+  return true;
 }
 }  // namespace tgfx

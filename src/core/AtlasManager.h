@@ -30,6 +30,8 @@ class AtlasManager : public AtlasGenerationCounter, public FlushCallbackObject {
 
   const std::vector<std::shared_ptr<TextureProxy>>& getTextureProxies(MaskFormat maskFormat);
 
+  const std::vector<std::shared_ptr<PixelBuffer>>& getHardwareBuffers(MaskFormat maskFormat) const;
+
   bool getCellLocator(MaskFormat, const BytesKey& key, AtlasCellLocator& locator) const;
 
   bool addCellToAtlas(const AtlasCell& cell, AtlasToken nextFlushToken, AtlasLocator&) const;

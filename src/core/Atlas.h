@@ -23,6 +23,7 @@
 #include <set>
 #include "core/AtlasCell.h"
 #include "core/AtlasTypes.h"
+#include "core/PixelBuffer.h"
 #include "gpu/ProxyProvider.h"
 #include "gpu/proxies/TextureProxy.h"
 #include "tgfx/core/Size.h"
@@ -42,6 +43,10 @@ class Atlas {
 
   const std::vector<std::shared_ptr<TextureProxy>>& getTextureProxies() const {
     return textureProxies;
+  }
+
+  const std::vector<std::shared_ptr<PixelBuffer>>& getHardwareBuffers() const {
+    return hardwareBuffers;
   }
 
   void compact(AtlasToken);
@@ -74,6 +79,7 @@ class Atlas {
   PixelFormat pixelFormat = PixelFormat::Unknown;
   AtlasGenerationCounter* const generationCounter;
   std::vector<std::shared_ptr<TextureProxy>> textureProxies = {};
+  std::vector<std::shared_ptr<PixelBuffer>> hardwareBuffers = {};
   std::vector<Page> pages = {};
   AtlasToken previousFlushToken = AtlasToken::InvalidToken();
   uint32_t flushesSinceLastUse = 0;

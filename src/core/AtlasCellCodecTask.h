@@ -18,28 +18,28 @@
 
 #pragma once
 
-#include "ResourceTask.h"
-#include "core/ImageSource.h"
-#include "core/PixelBuffer.h"
-#include "gpu/proxies/TextureProxy.h"
+#include "tgfx/core/ImageCodec.h"
+#include "tgfx/core/Task.h"
 
 namespace tgfx {
-class TextAtlasUploadTask final : public ResourceTask {
+class AtlasCellCodecTask final : public Task {
  public:
-  TextAtlasUploadTask(UniqueKey uniqueKey, std::shared_ptr<DataSource<PixelBuffer>> source,
-                      std::shared_ptr<TextureProxy> proxy, Point atlasOffset);
-
-  bool execute(Context* context) override;
-
- protected:
-  std::shared_ptr<Resource> onMakeResource(Context*) override {
-    // The execute() method is already overridden, so this method should never be called.
-    return nullptr;
+  AtlasCellCodecTask(std::shared_ptr<ImageCodec> imageCodec, void* dstPixels,
+                     const ImageInfo& dstInfo, void* clearPixels, const ImageInfo& clearInfo)
+      : imageCodec(std::move(imageCodec)), dstPixels(dstPixels), dstInfo(dstInfo),
+        clearPixels(clearPixels), clearInfo(clearInfo) {
   }
 
+ protected:
+  void onExecute() override;
+
+  void onCancel() override;
+
  private:
-  std::shared_ptr<DataSource<PixelBuffer>> source = nullptr;
-  std::shared_ptr<TextureProxy> textureProxy = nullptr;
-  Point atlasOffset = Point::Zero();
+  std::shared_ptr<ImageCodec> imageCodec = nullptr;
+  void* dstPixels = nullptr;
+  ImageInfo dstInfo = {};
+  void* clearPixels = nullptr;
+  ImageInfo clearInfo = {};
 };
 }  // namespace tgfx

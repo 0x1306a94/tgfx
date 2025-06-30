@@ -16,18 +16,22 @@
 //
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "ClearPixels.h"
+#include "AtlasCellCodecTask.h"
+#include "core/utils/ClearPixels.h"
 
 namespace tgfx {
-void ClearPixels(const ImageInfo& dstInfo, void* dstPixels) {
-  if (dstInfo.rowBytes() == dstInfo.minRowBytes()) {
-    memset(dstPixels, 0, dstInfo.byteSize());
+
+void AtlasCellCodecTask::onExecute() {
+  if (imageCodec == nullptr) {
     return;
   }
-  auto height = static_cast<size_t>(dstInfo.height());
-  for (size_t y = 0; y < height; ++y) {
-    auto row = static_cast<uint8_t*>(dstPixels) + y * dstInfo.rowBytes();
-    memset(row, 0, dstInfo.minRowBytes());
+  if (clearPixels != nullptr) {
+    ClearPixels(clearInfo, clearPixels);
   }
+  imageCodec->readPixels(dstInfo, dstPixels);
+}
+
+void AtlasCellCodecTask::onCancel() {
+  imageCodec = nullptr;
 }
 }  // namespace tgfx

@@ -18,6 +18,8 @@
 
 #pragma once
 
+#include <set>
+#include "core/PixelBuffer.h"
 #include "core/utils/BlockBuffer.h"
 #include "core/utils/SlidingWindowTracker.h"
 #include "gpu/AAType.h"
@@ -26,6 +28,7 @@
 #include "gpu/proxies/GpuShapeProxy.h"
 #include "gpu/proxies/RenderTargetProxy.h"
 #include "gpu/proxies/TextureProxy.h"
+#include "gpu/tasks/SoftwareAtlasUploadTask.h"
 #include "tgfx/core/ImageGenerator.h"
 #include "tgfx/core/Shape.h"
 
@@ -117,6 +120,9 @@ class ProxyProvider {
                                                    ImageOrigin origin = ImageOrigin::TopLeft,
                                                    uint32_t renderFlags = 0);
 
+  std::shared_ptr<TextureProxy> createDeferTextureProxy(
+      const UniqueKey& uniqueKey, const std::shared_ptr<PixelBuffer>& pixelBuffer);
+
   /**
    * Creates a flattened TextureProxy for the given TextureProxy.
    */
@@ -157,6 +163,12 @@ class ProxyProvider {
    */
   void clearSharedVertexBuffer();
 
+  void addAtlasCellCodecTask(const std::shared_ptr<TextureProxy>& textureProxy,
+                             std::shared_ptr<PixelBuffer> hardwareBuffer, const Point& atlasOffset,
+                             std::shared_ptr<ImageCodec> codec);
+
+  void flushAtlasCellCodecTasks();
+
  private:
   Context* context = nullptr;
   ResourceKeyMap<std::weak_ptr<ResourceProxy>> proxyMap = {};
@@ -165,6 +177,10 @@ class ProxyProvider {
   std::vector<std::shared_ptr<Task>> sharedVertexBufferTasks = {};
   BlockBuffer blockBuffer = {};
   SlidingWindowTracker maxValueTracker = {10};
+  std::vector<std::shared_ptr<Task>> atlasCellCodecTasks = {};
+  std::map<std::shared_ptr<TextureProxy>, std::vector<AtlasCellData>> atlasCellDatas = {};
+  std::map<std::shared_ptr<TextureProxy>, std::pair<std::shared_ptr<PixelBuffer>, void*>>
+      atlasHardwareBuffers = {};
 
   static UniqueKey GetProxyKey(const UniqueKey& uniqueKey, uint32_t renderFlags);
 

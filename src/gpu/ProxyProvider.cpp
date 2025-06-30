@@ -17,6 +17,9 @@
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "ProxyProvider.h"
+#include "core/AtlasCellCodecTask.h"
+#include "core/AtlasManager.h"
+#include "core/AtlasTypes.h"
 #include "core/ShapeRasterizer.h"
 #include "core/shapes/MatrixShape.h"
 #include "core/utils/USE.h"
@@ -32,9 +35,22 @@
 #include "gpu/tasks/TextureCreateTask.h"
 #include "gpu/tasks/TextureFlattenTask.h"
 #include "gpu/tasks/TextureUploadTask.h"
+#include "tasks/HardwareAtlasUploadTask.h"
 #include "tgfx/core/RenderFlags.h"
 
 namespace tgfx {
+static ColorType getColorType(bool isAplhaOnly) {
+  if (isAplhaOnly) {
+    return ColorType::ALPHA_8;
+  }
+#ifdef __APPLE__
+  return ColorType::BGRA_8888;
+#else
+  return ColorType::RGBA_8888;
+  ;
+#endif
+}
+
 ProxyProvider::ProxyProvider(Context* context) : context(context), blockBuffer(1 << 14) {  // 16KB
 }
 
@@ -460,4 +476,93 @@ void ProxyProvider::addResourceProxy(std::shared_ptr<ResourceProxy> proxy,
   }
 }
 
+std::shared_ptr<TextureProxy> ProxyProvider::createDeferTextureProxy(
+    const UniqueKey& uniqueKey, const std::shared_ptr<PixelBuffer>& pixelBuffer) {
+  if (pixelBuffer == nullptr) {
+    return nullptr;
+  }
+  auto proxy = std::static_pointer_cast<TextureProxy>(findProxy(uniqueKey));
+  if (proxy != nullptr) {
+    return proxy;
+  }
+  const auto& info = pixelBuffer->info();
+  proxy = std::shared_ptr<TextureProxy>(
+      new DefaultTextureProxy(uniqueKey, info.width(), info.height(), false, info.isAlphaOnly()));
+  addResourceProxy(proxy, uniqueKey);
+  return proxy;
+}
+
+void ProxyProvider::flushAtlasCellCodecTasks() {
+  if (atlasCellCodecTasks.empty()) {
+    atlasHardwareBuffers.clear();
+    return;
+  }
+  std::map<std::shared_ptr<PixelBuffer>, std::shared_ptr<TextureProxy>> bufferTextures;
+  for (auto& [proxy, buffer] : atlasHardwareBuffers) {
+    bufferTextures[buffer.first] = proxy;
+  }
+  PlacementPtr<ResourceTask> task;
+  if (atlasHardwareBuffers.empty()) {
+    task = context->drawingBuffer()->make<SoftwareAtlasUploadTask>(
+        UniqueKey::Make(), std::move(atlasCellCodecTasks), std::move(atlasCellDatas));
+  } else {
+    task = context->drawingBuffer()->make<HardwareAtlasUploadTask>(
+        UniqueKey::Make(), std::move(atlasCellCodecTasks), std::move(bufferTextures));
+  }
+  atlasHardwareBuffers.clear();
+  atlasCellDatas.clear();
+  context->drawingManager()->addResourceTask(std::move(task));
+}
+
+void ProxyProvider::addAtlasCellCodecTask(const std::shared_ptr<TextureProxy>& textureProxy,
+                                          std::shared_ptr<PixelBuffer> hardwareBuffer,
+                                          const Point& atlasOffset,
+                                          std::shared_ptr<ImageCodec> codec) {
+  if (textureProxy == nullptr || codec == nullptr) {
+    return;
+  }
+  ImageInfo dstInfo = {};
+  void* dstPixels = nullptr;
+  void* clearPixels = nullptr;
+  std::shared_ptr<Data> data = nullptr;
+  ImageInfo clearInfo = {};
+  auto padding = Plot::CellPadding;
+  auto floatPadding = static_cast<float>(padding);
+  if (hardwareBuffer != nullptr && hardwareBuffer->isHardwareBacked()) {
+    void* pixels = nullptr;
+    auto hardwareInfo = hardwareBuffer->info();
+    dstInfo = hardwareInfo.makeIntersect(0, 0, codec->width(), codec->height());
+    clearInfo = hardwareInfo.makeIntersect(0, 0, codec->width() + 2 * padding,
+                                           codec->height() + 2 * padding);
+    auto iter = atlasHardwareBuffers.find(textureProxy);
+    if (iter == atlasHardwareBuffers.end()) {
+      pixels = hardwareBuffer->lockPixels();
+      atlasHardwareBuffers.emplace(textureProxy, std::make_pair(std::move(hardwareBuffer), pixels));
+    } else {
+      pixels = iter->second.second;
+    }
+    auto clearOffset =
+        static_cast<uint32_t>(atlasOffset.y - floatPadding) * hardwareInfo.rowBytes() +
+        static_cast<uint32_t>(atlasOffset.x - floatPadding) * hardwareInfo.bytesPerPixel();
+    auto dstOffset = clearOffset + hardwareInfo.rowBytes() + hardwareInfo.bytesPerPixel();
+    dstPixels = static_cast<uint8_t*>(pixels) + dstOffset;
+    clearPixels = static_cast<uint8_t*>(pixels) + clearOffset;
+  } else {
+    auto colorType = getColorType(codec->isAlphaOnly());
+    clearInfo =
+        ImageInfo::Make(codec->width() + 2 * padding, codec->height() + 2 * padding, colorType);
+    dstInfo = clearInfo.makeIntersect(0, 0, codec->width(), codec->height());
+    auto length = clearInfo.byteSize();
+    auto buffer = new (std::nothrow) uint8_t[length];
+    data = Data::MakeAdopted(buffer, length, Data::DeleteProc);
+    clearPixels = buffer;
+    dstPixels =
+        buffer + (clearInfo.rowBytes() + clearInfo.bytesPerPixel()) * static_cast<size_t>(padding);
+    Point newAtlasOffset{atlasOffset.x - floatPadding, atlasOffset.y - floatPadding};
+    atlasCellDatas[textureProxy].emplace_back(std::move(data), clearInfo, newAtlasOffset);
+  }
+  auto task = std::make_shared<AtlasCellCodecTask>(std::move(codec), dstPixels, dstInfo,
+                                                   clearPixels, clearInfo);
+  atlasCellCodecTasks.emplace_back(std::move(task));
+}
 }  // namespace tgfx

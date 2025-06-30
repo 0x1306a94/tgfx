@@ -32,7 +32,7 @@
 #include "core/utils/ApplyStrokeToBounds.h"
 #include "core/utils/MathExtra.h"
 #include "gpu/DrawingManager.h"
-#include "gpu/tasks/TextAtlasUploadTask.h"
+#include "gpu/tasks/SoftwareAtlasUploadTask.h"
 
 namespace tgfx {
 static uint32_t getTypefaceID(const Typeface* typeface, bool isCustom) {
@@ -390,6 +390,7 @@ void RenderContext::directMaskDrawing(const GlyphRun& sourceGlyphRun, const MCSt
 
     auto maskFormat = getMaskFormat(font);
     auto& textureProxies = atlasManager->getTextureProxies(maskFormat);
+    auto& hardwareBuffers = atlasManager->getHardwareBuffers(maskFormat);
 
     auto glyphState = state;
     AtlasCellLocator cellLocator;
@@ -410,11 +411,14 @@ void RenderContext::directMaskDrawing(const GlyphRun& sourceGlyphRun, const MCSt
       glyphCell._matrix = glyphState.matrix;
 
       if (atlasManager->addCellToAtlas(glyphCell, nextFlushToken, atlasLocator)) {
-        auto source = GlyphSource::MakeFrom(glyphCodec);
+        auto pageIndex = atlasLocator.pageIndex();
+        std::shared_ptr<PixelBuffer> hardwareBuffer = nullptr;
+        if (pageIndex < hardwareBuffers.size()) {
+          hardwareBuffer = hardwareBuffers[pageIndex];
+        }
         auto offset = Point::Make(atlasLocator.getLocation().left, atlasLocator.getLocation().top);
-        auto task = getContext()->drawingBuffer()->make<TextAtlasUploadTask>(
-            UniqueKey::Make(), std::move(source), textureProxies[atlasLocator.pageIndex()], offset);
-        getContext()->drawingManager()->addResourceTask(std::move(task));
+        getContext()->proxyProvider()->addAtlasCellCodecTask(
+            textureProxies[pageIndex], std::move(hardwareBuffer), offset, std::move(glyphCodec));
       } else {
         rejectedGlyphRun.glyphs.push_back(glyphID);
         rejectedGlyphRun.positions.push_back(glyphPosition);
@@ -453,6 +457,7 @@ void RenderContext::pathDrawing(GlyphRun& sourceGlyphRun, const MCState& state, 
     font = font.makeWithSize(font.getSize() * maxScale);
   }
   size_t index = 0;
+  Rect bounds = {};
   auto& positions = sourceGlyphRun.positions;
   for (auto& glyphID : sourceGlyphRun.glyphs) {
     Path glyphPath = {};
@@ -462,28 +467,36 @@ void RenderContext::pathDrawing(GlyphRun& sourceGlyphRun, const MCState& state, 
       glyphMatrix.postTranslate(position.x, position.y);
       glyphPath.transform(glyphMatrix);
       totalPath.addPath(glyphPath);
+      auto glyphBounds = font.getBounds(glyphID);
+      glyphBounds.offset(position.x * maxScale, position.y * maxScale);
+      bounds.join(glyphBounds);
     } else {
       rejectedGlyphRun.glyphs.push_back(glyphID);
       rejectedGlyphRun.positions.push_back(position);
     }
     index++;
   }
+  bounds.scale(1.0f / maxScale, 1.0f / maxScale);
   if (totalPath.isEmpty()) {
     rejectedGlyphRun = std::move(sourceGlyphRun);
     return;
   }
+  if (stroke) {
+    ApplyStrokeToBounds(*stroke, &bounds);
+  }
+  state.matrix.mapRect(&bounds);
+  if (!bounds.intersects(clipBounds)) {
+    return;
+  }
 
   auto rasterizeMatrix = state.matrix;
-  rasterizeMatrix.postTranslate(-clipBounds.x(), -clipBounds.y());
+  rasterizeMatrix.postTranslate(-bounds.x(), -bounds.y());
   auto shape = Shape::MakeFrom(totalPath);
   shape = Shape::ApplyStroke(std::move(shape), stroke);
   shape = Shape::ApplyMatrix(std::move(shape), rasterizeMatrix);
-  auto bounds = shape->getBounds();
-  bounds.offset(clipBounds.x(), clipBounds.y());
-  bounds.intersect(clipBounds);
-  bounds.roundOut();
-  auto width = static_cast<int>(bounds.width());
-  auto height = static_cast<int>(bounds.height());
+
+  auto width = static_cast<int>(ceilf(bounds.width()));
+  auto height = static_cast<int>(ceilf(bounds.height()));
 
   auto rasterizer = PathRasterizer::Make(width, height, std::move(shape), true, true);
   auto image = Image::MakeFrom(std::move(rasterizer));
@@ -492,7 +505,7 @@ void RenderContext::pathDrawing(GlyphRun& sourceGlyphRun, const MCState& state, 
     return;
   }
   auto newState = state;
-  newState.matrix = Matrix::MakeTrans(clipBounds.x(), clipBounds.y());
+  newState.matrix = Matrix::MakeTrans(bounds.x(), bounds.y());
   auto rect = Rect::MakeWH(image->width(), image->height());
   opsCompositor->fillImage(std::move(image), rect, {}, newState,
                            fill.makeWithMatrix(rasterizeMatrix), SrcRectConstraint::Fast);
@@ -549,6 +562,7 @@ void RenderContext::transformedMaskDrawing(const GlyphRun& sourceGlyphRun, const
                     scaledStroke.get(), glyphKey);
     auto maskFormat = getMaskFormat(font);
     auto& textureProxies = atlasManager->getTextureProxies(maskFormat);
+    auto& hardwareBuffers = atlasManager->getHardwareBuffers(maskFormat);
 
     auto glyphState = state;
     AtlasCellLocator glyphLocator;
@@ -568,11 +582,19 @@ void RenderContext::transformedMaskDrawing(const GlyphRun& sourceGlyphRun, const
       if (!atlasManager->addCellToAtlas(atlasCell, nextFlushToken, atlasLocator)) {
         continue;
       }
-      auto source = GlyphSource::MakeFrom(glyphCodec);
+      auto pageIndex = atlasLocator.pageIndex();
+      std::shared_ptr<PixelBuffer> hardwareBuffer = nullptr;
+      if (pageIndex < hardwareBuffers.size()) {
+        hardwareBuffer = hardwareBuffers[pageIndex];
+      }
       auto offset = Point::Make(atlasLocator.getLocation().left, atlasLocator.getLocation().top);
-      auto task = getContext()->drawingBuffer()->make<TextAtlasUploadTask>(
-          UniqueKey::Make(), std::move(source), textureProxies[atlasLocator.pageIndex()], offset);
-      getContext()->drawingManager()->addResourceTask(std::move(task));
+      getContext()->proxyProvider()->addAtlasCellCodecTask(
+          textureProxies[pageIndex], std::move(hardwareBuffer), offset, std::move(glyphCodec));
+      // auto source = GlyphSource::MakeFrom(glyphCodec);
+      // auto offset = Point::Make(atlasLocator.getLocation().left, atlasLocator.getLocation().top);
+      // auto task = getContext()->drawingBuffer()->make<SoftwareAtlasUploadTask>(
+      //     UniqueKey::Make(), std::move(source), textureProxies[atlasLocator.pageIndex()], offset);
+      // getContext()->drawingManager()->addResourceTask(std::move(task));
     }
 
     atlasManager->setPlotUseToken(plotUseUpdater, atlasLocator.plotLocator(), maskFormat,

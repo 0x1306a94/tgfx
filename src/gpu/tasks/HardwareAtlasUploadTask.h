@@ -16,18 +16,31 @@
 //
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "ClearPixels.h"
+#pragma once
+
+#include <map>
+#include "ResourceTask.h"
+#include "core/ImageSource.h"
+#include "core/PixelBuffer.h"
+#include "gpu/proxies/TextureProxy.h"
 
 namespace tgfx {
-void ClearPixels(const ImageInfo& dstInfo, void* dstPixels) {
-  if (dstInfo.rowBytes() == dstInfo.minRowBytes()) {
-    memset(dstPixels, 0, dstInfo.byteSize());
-    return;
+class HardwareAtlasUploadTask : public ResourceTask {
+ public:
+  HardwareAtlasUploadTask(
+      UniqueKey uniqueKey, std::vector<std::shared_ptr<Task>> tasks,
+      std::map<std::shared_ptr<PixelBuffer>, std::shared_ptr<TextureProxy>> buffers);
+
+  bool execute(Context* context) override;
+
+ protected:
+  std::shared_ptr<Resource> onMakeResource(Context*) override {
+    // The execute() method is already overridden, so this method should never be called.
+    return nullptr;
   }
-  auto height = static_cast<size_t>(dstInfo.height());
-  for (size_t y = 0; y < height; ++y) {
-    auto row = static_cast<uint8_t*>(dstPixels) + y * dstInfo.rowBytes();
-    memset(row, 0, dstInfo.minRowBytes());
-  }
-}
+
+ private:
+  std::vector<std::shared_ptr<Task>> cellTasks = {};
+  std::map<std::shared_ptr<PixelBuffer>, std::shared_ptr<TextureProxy>> buffers = {};
+};
 }  // namespace tgfx

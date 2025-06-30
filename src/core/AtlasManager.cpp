@@ -37,6 +37,11 @@ const std::vector<std::shared_ptr<TextureProxy>>& AtlasManager::getTextureProxie
   return kEmpty;
 }
 
+const std::vector<std::shared_ptr<PixelBuffer>>& AtlasManager::getHardwareBuffers(
+    MaskFormat format) const {
+  return this->getAtlas(format)->getHardwareBuffers();
+}
+
 bool AtlasManager::initAtlas(MaskFormat maskFormat) {
   auto index = MaskFormatToAtlasIndex(maskFormat);
   AtlasConfig atlasConfig(context->caps()->maxTextureSize);

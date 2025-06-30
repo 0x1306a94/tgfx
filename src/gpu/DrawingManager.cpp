@@ -124,7 +124,6 @@ bool DrawingManager::flush() {
   for (auto flushCallbackObject : flushCallbackObjects) {
     flushCallbackObject->preFlush();
   }
-
   while (!compositors.empty()) {
     auto compositor = compositors.back();
     // The makeClosed() method may add more compositors to the list.
@@ -133,7 +132,7 @@ bool DrawingManager::flush() {
   auto proxyProvider = context->proxyProvider();
   // Flush the shared vertex buffer before executing the tasks. It may generate new resource tasks.
   proxyProvider->flushSharedVertexBuffer();
-
+  proxyProvider->flushAtlasCellCodecTasks();
   if (resourceTasks.empty() && renderTasks.empty()) {
     proxyProvider->clearSharedVertexBuffer();
     return false;

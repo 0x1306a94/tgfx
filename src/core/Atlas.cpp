@@ -103,12 +103,25 @@ bool Atlas::activateNewPage() {
     }
   }
   pages.push_back(std::move(page));
-  auto proxy = proxyProvider->createTextureProxy(UniqueKey::Make(), textureWidth, textureHeight,
-                                                 pixelFormat);
-  if (proxy == nullptr) {
+  std::shared_ptr<TextureProxy> textureProxy;
+  if (HardwareBufferAvailable()) {
+    auto pixelBuffer =
+        PixelBuffer::Make(textureWidth, textureHeight, pixelFormat == PixelFormat::ALPHA_8);
+    if (pixelBuffer != nullptr && pixelBuffer->isHardwareBacked()) {
+      textureProxy = proxyProvider->createDeferTextureProxy(UniqueKey::Make(), pixelBuffer);
+      if (textureProxy != nullptr) {
+        hardwareBuffers.emplace_back(std::move(pixelBuffer));
+      }
+    }
+  }
+  if (textureProxy == nullptr) {
+    textureProxy = proxyProvider->createTextureProxy(UniqueKey::Make(), textureWidth, textureHeight,
+                                                     pixelFormat);
+  }
+  if (textureProxy == nullptr) {
     return false;
   }
-  textureProxies.push_back(std::move(proxy));
+  textureProxies.push_back(std::move(textureProxy));
   return true;
 }
 
@@ -169,6 +182,9 @@ void Atlas::deactivateLastPage() {
   auto pageIndex = pages.size() - 1;
   pages.pop_back();
   textureProxies.pop_back();
+  if (!hardwareBuffers.empty()) {
+    hardwareBuffers.pop_back();
+  }
   for (const auto& [key, cellLocator] : cellLocators) {
     if (cellLocator.atlasLocator.pageIndex() == pageIndex) {
       expiredKeys.insert(key);
