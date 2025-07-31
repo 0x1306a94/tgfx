@@ -354,7 +354,7 @@ std::shared_ptr<TextureProxy> RenderContext::getClipTexture(const Path& clip, AA
 }
 
 std::unique_ptr<FragmentProcessor> RenderContext::getClipMask(const Path& clip,
-                                                              const Rect& deviceBounds,
+                                                              const Rect& deviceBounds,const Matrix& viewMatrix,
                                                               AAType aaType, Rect* scissorRect) {
   if ((!clip.isEmpty() && clip.contains(deviceBounds)) ||
       (clip.isEmpty() && clip.isInverseFillType())) {
@@ -377,14 +377,9 @@ std::unique_ptr<FragmentProcessor> RenderContext::getClipMask(const Path& clip,
   FlipYIfNeeded(scissorRect, renderTarget);
   scissorRect->roundOut();
   auto textureProxy = getClipTexture(clip, aaType);
-  auto uvMatrix = Matrix::MakeTrans(-clipBounds.left, -clipBounds.top);
-  if (renderTarget->origin() == ImageOrigin::BottomLeft) {
-    auto flipYMatrix = Matrix::MakeScale(1.0f, -1.0f);
-    flipYMatrix.postTranslate(0, -static_cast<float>(renderTarget->height()));
-    uvMatrix.preConcat(flipYMatrix);
-  }
-  return FragmentProcessor::MulInputByChildAlpha(
-      DeviceSpaceTextureEffect::Make(std::move(textureProxy), uvMatrix));
+  auto uvMatrix = viewMatrix;
+  uvMatrix.postTranslate(-clipBounds.left, -clipBounds.top);
+  return TextureEffect::Make(std::move(textureProxy), {}, &uvMatrix, true);
 }
 
 void RenderContext::addDrawOp(std::unique_ptr<DrawOp> op, const Rect& localBounds,
@@ -422,7 +417,7 @@ void RenderContext::addDrawOp(std::unique_ptr<DrawOp> op, const Rect& localBound
     }
   }
   Rect scissorRect = Rect::MakeEmpty();
-  auto clipMask = getClipMask(state.clip, op->bounds(), aaType, &scissorRect);
+  auto clipMask = getClipMask(state.clip, op->bounds(),state.matrix, aaType, &scissorRect);
   if (clipMask) {
     op->addCoverageFP(std::move(clipMask));
   }
