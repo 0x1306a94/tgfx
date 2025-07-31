@@ -35,11 +35,11 @@ GLDeviceSpaceTextureEffect::GLDeviceSpaceTextureEffect(std::shared_ptr<TexturePr
 
 void GLDeviceSpaceTextureEffect::emitCode(EmitArgs& args) const {
   auto* fragBuilder = args.fragBuilder;
-  auto* uniformHandler = args.uniformHandler;
-  auto deviceCoordMatrixName =
-      uniformHandler->addUniform(ShaderFlags::Fragment, SLType::Float3x3, "DeviceCoordMatrix");
-  fragBuilder->codeAppendf("vec3 deviceCoord = %s * vec3(gl_FragCoord.xy, 1.0);",
-                           deviceCoordMatrixName.c_str());
+  // auto* uniformHandler = args.uniformHandler;
+  // auto deviceCoordMatrixName =
+  //     uniformHandler->addUniform(ShaderFlags::Fragment, SLType::Float3x3, "DeviceCoordMatrix");
+  // fragBuilder->codeAppendf("vec3 deviceCoord = %s * vec3(gl_FragCoord.xy, 1.0);",
+  //                          deviceCoordMatrixName.c_str());
   std::string coordName = "deviceCoord.xy";
   fragBuilder->codeAppendf("%s = ", args.outputColor.c_str());
   fragBuilder->appendTextureLookup((*args.textureSamplers)[0], coordName);
@@ -53,14 +53,14 @@ void GLDeviceSpaceTextureEffect::emitCode(EmitArgs& args) const {
   }
 }
 
-void GLDeviceSpaceTextureEffect::onSetData(UniformBuffer* uniformBuffer) const {
+void GLDeviceSpaceTextureEffect::onSetData(UniformBuffer* /*uniformBuffer*/) const {
   auto texture = textureProxy->getTexture();
   if (texture == nullptr) {
     return;
   }
-  auto deviceCoordMatrix = uvMatrix;
-  auto scale = texture->getTextureCoord(1, 1);
-  deviceCoordMatrix.postScale(scale.x, scale.y);
-  uniformBuffer->setData("DeviceCoordMatrix", deviceCoordMatrix);
+  // auto deviceCoordMatrix = uvMatrix;
+  // auto scale = texture->getTextureCoord(1, 1);
+  // deviceCoordMatrix.postScale(scale.x, scale.y);
+  // uniformBuffer->setData("DeviceCoordMatrix", deviceCoordMatrix);
 }
 }  // namespace tgfx

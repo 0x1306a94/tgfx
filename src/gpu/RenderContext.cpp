@@ -134,30 +134,18 @@ void RenderContext::drawImageRect(std::shared_ptr<Image> image, const Rect& rect
                                   const FillStyle& style) {
   DEBUG_ASSERT(image != nullptr);
   DEBUG_ASSERT(image->isAlphaOnly() || style.shader == nullptr);
+  auto uvMatrix = Matrix::I();
   auto subsetImage = Caster::AsSubsetImage(image.get());
   if (subsetImage != nullptr) {
-    // Unwrap the subset image to maximize the merging of draw calls.
-    auto& subset = subsetImage->bounds;
-    auto newRect = rect;
-    newRect.offset(subset.left, subset.top);
-    auto newState = state;
-    newState.matrix.preTranslate(-subset.left, -subset.top);
-    auto offsetMatrix = Matrix::MakeTrans(subset.left, subset.top);
-    drawImageRect(subsetImage->source, newRect, sampling, newState,
-                  ApplyMatrix(style, offsetMatrix));
-    return;
+    uvMatrix = Matrix::MakeTrans(subsetImage->bounds.left, subsetImage->bounds.top);
+    image = subsetImage->source;
   }
-  FPArgs args = {getContext(), opContext.renderFlags, rect};
-  auto samplingOptions = sampling;
-  if (samplingOptions.mipmapMode != MipmapMode::None && !state.matrix.hasNonIdentityScale()) {
-    // There is no scaling for the source image, so we can disable mipmaps to save memory.
-    samplingOptions.mipmapMode = MipmapMode::None;
-  }
-  auto processor = FragmentProcessor::Make(std::move(image), args, samplingOptions);
+  FPArgs args = {getContext(), opContext.renderFlags, rect, state.matrix};
+  auto processor = FragmentProcessor::Make(std::move(image), args, sampling);
   if (processor == nullptr) {
     return;
   }
-  auto drawOp = RectDrawOp::Make(style.color.premultiply(), rect, state.matrix);
+  auto drawOp = RectDrawOp::Make(style.color.premultiply(), rect, state.matrix,uvMatrix);
   drawOp->addColorFP(std::move(processor));
   addDrawOp(std::move(drawOp), rect, state, style);
 }
@@ -355,6 +343,7 @@ std::shared_ptr<TextureProxy> RenderContext::getClipTexture(const Path& clip, AA
 
 std::unique_ptr<FragmentProcessor> RenderContext::getClipMask(const Path& clip,
                                                               const Rect& deviceBounds,
+                                                              const Matrix& viewMatrix,
                                                               AAType aaType, Rect* scissorRect) {
   if ((!clip.isEmpty() && clip.contains(deviceBounds)) ||
       (clip.isEmpty() && clip.isInverseFillType())) {
@@ -377,14 +366,12 @@ std::unique_ptr<FragmentProcessor> RenderContext::getClipMask(const Path& clip,
   FlipYIfNeeded(scissorRect, renderTarget);
   scissorRect->roundOut();
   auto textureProxy = getClipTexture(clip, aaType);
-  auto uvMatrix = Matrix::MakeTrans(-clipBounds.left, -clipBounds.top);
-  if (renderTarget->origin() == ImageOrigin::BottomLeft) {
-    auto flipYMatrix = Matrix::MakeScale(1.0f, -1.0f);
-    flipYMatrix.postTranslate(0, -static_cast<float>(renderTarget->height()));
-    uvMatrix.preConcat(flipYMatrix);
-  }
-  return FragmentProcessor::MulInputByChildAlpha(
-      DeviceSpaceTextureEffect::Make(std::move(textureProxy), uvMatrix));
+  auto uvMatrix = viewMatrix;
+  uvMatrix.postTranslate(-clipBounds.left, -clipBounds.top);
+
+  return TextureEffect::Make(std::move(textureProxy), {}, &uvMatrix, true);
+  // return FragmentProcessor::MulInputByChildAlpha(
+  //     DeviceSpaceTextureEffect::Make(std::move(textureProxy), uvMatrix));
 }
 
 void RenderContext::addDrawOp(std::unique_ptr<DrawOp> op, const Rect& localBounds,
@@ -392,10 +379,10 @@ void RenderContext::addDrawOp(std::unique_ptr<DrawOp> op, const Rect& localBound
   if (op == nullptr) {
     return;
   }
-  FPArgs args = {getContext(), opContext.renderFlags, localBounds};
+  FPArgs args = {getContext(), opContext.renderFlags, localBounds, state.matrix};
   auto isRectOp = op->classID() == RectDrawOp::ClassID();
   auto aaType = getAAType(style);
-  if (aaType == AAType::Coverage && isRectOp && state.matrix.rectStaysRect() &&
+  if (aaType == AAType::Coverage && isRectOp && args.viewMatrix.rectStaysRect() &&
       IsPixelAligned(op->bounds())) {
     op->setAA(AAType::None);
   } else {
@@ -422,7 +409,7 @@ void RenderContext::addDrawOp(std::unique_ptr<DrawOp> op, const Rect& localBound
     }
   }
   Rect scissorRect = Rect::MakeEmpty();
-  auto clipMask = getClipMask(state.clip, op->bounds(), aaType, &scissorRect);
+  auto clipMask = getClipMask(state.clip, op->bounds(),args.viewMatrix, aaType, &scissorRect);
   if (clipMask) {
     op->addCoverageFP(std::move(clipMask));
   }
