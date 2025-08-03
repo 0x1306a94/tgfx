@@ -215,33 +215,7 @@
             font-size: 11px;
         }
 
-        .drawer-controls {
-            padding: 10px 20px;
-            background: #f8f9fa;
-            border-top: 1px solid #e9ecef;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .drawer-btn {
-            background: #007bff;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 11px;
-        }
-
-        .drawer-btn:hover {
-            background: #0056b3;
-        }
-
-        .drawer-btn.active {
-            background: #28a745;
-        }
+        /* Hello2D示例相关样式已移除 */
 
         .example-controls {
             padding: 10px 20px;
@@ -358,14 +332,7 @@ int main() {
                 <div class="console-line console-info">正在初始化全量内联编译器，包含所有36个TGFX头文件...</div>
             </div>
 
-            <div class="drawer-controls">
-                <span>TGFX示例:</span>
-                <button class="drawer-btn" onclick="switchDrawer(0)">网格背景</button>
-                <button class="drawer-btn" onclick="switchDrawer(1)">简单文本</button>
-                <button class="drawer-btn" onclick="switchDrawer(2)">图片阴影</button>
-                <button class="drawer-btn" onclick="switchDrawer(3)">渐变效果</button>
-                <button class="drawer-btn" onclick="switchDrawer(4)">图片Mipmap</button>
-            </div>
+            <!-- Hello2D示例控制面板已移除 - 现在使用纯TGFX API渲染 -->
             
             <div class="canvas-container">
                 <canvas id="renderCanvas" width="800" height="600"></canvas>
@@ -405,7 +372,7 @@ window.TGFXBind = function(module) {
 let Hello2DModule = null;
 let tgfxView = null;
 let isRealTGFX = false;
-let currentDrawIndex = 0;
+// currentDrawIndex已移除 - 不再需要示例索引
 let isCompilerReady = false;
 let tgfxLibraryLoaded = false;
 let isCompiling = false;
@@ -2296,8 +2263,7 @@ async function initHello2D() {
                 }
 
                 updateCanvasSize();
-                // 不要自动绘制示例，等待用户代码
-                // drawWithTGFX(0);
+                // 画布已就绪，等待用户编译C++代码
                 isRealTGFX = true;
                 setTGFXLibInfo('TGFX库: 已加载');
                 addConsoleOutput('✅ Hello2D模块加载成功', 'success');
@@ -2503,10 +2469,7 @@ async function executeCppAsJavaScript(cppCode) {
                 await executeUserTGFXCode(tgfxCalls);
                 addConsoleOutput('✅ TGFX用户代码渲染完成', 'success');
             } else {
-                addConsoleOutput('使用Hello2D示例渲染', 'info');
-                // 使用Hello2D的示例渲染
-                tgfxView.draw(0, 1.0, 0, 0);
-                addConsoleOutput('✅ 示例渲染完成', 'success');
+                addConsoleOutput('⚠️ 未检测到TGFX API调用，跳过渲染', 'warning');
             }
 
         } else {
@@ -2601,176 +2564,139 @@ function parseUserTGFXCalls(cppCode) {
 }
 
 async function executeUserTGFXCode(tgfxCalls) {
-    if (!tgfxView || !tgfxView.draw) {
+    if (!tgfxView) {
         throw new Error('TGFX视图不可用');
     }
 
     try {
-        // 停止自动重绘示例
-        if (window.autoRedrawInterval) {
-            clearInterval(window.autoRedrawInterval);
-            addConsoleOutput('✅ 已停止示例自动重绘', 'info');
-        }
+        // 准备执行用户自定义TGFX代码
         
-        // 设置为用户代码模式
-        currentDrawIndex = -1;
-        addConsoleOutput(`开始执行 ${tgfxCalls.length} 个TGFX调用`, 'info');
-        // 添加画布状态调试信息
-        addConsoleOutput('🔍 画布状态调试信息:', 'info');
-        addConsoleOutput(`画布尺寸: ${renderCanvas.width}x${renderCanvas.height}`, 'info');
-        addConsoleOutput(`画布显示状态: ${renderCanvas.style.display}`, 'info');
-        addConsoleOutput(`画布可见性: ${renderCanvas.style.visibility}`, 'info');
-        addConsoleOutput(`画布透明度: ${renderCanvas.style.opacity}`, 'info');
+        // 用户代码执行模式
+        addConsoleOutput(`🎯 开始执行 ${tgfxCalls.length} 个真正的TGFX API调用`, 'info');
         
-        // 检查WebGL上下文
-        const gl = renderCanvas.getContext('webgl') || renderCanvas.getContext('webgl2');
-        if (gl) {
-            addConsoleOutput(`WebGL上下文: ${gl.constructor.name}`, 'info');
-            addConsoleOutput(`WebGL视口: ${gl.getParameter(gl.VIEWPORT)}`, 'info');
-            addConsoleOutput(`WebGL清除颜色: ${gl.getParameter(gl.COLOR_CLEAR_VALUE)}`, 'info');
-        } else {
-            addConsoleOutput('❌ 无法获取WebGL上下文', 'error');
-        }
-        
-        // 强制设置画布样式
-        renderCanvas.style.display = 'block';
-        renderCanvas.style.visibility = 'visible';
-        renderCanvas.style.opacity = '1';
-        renderCanvas.style.border = '2px solid red'; // 红色边框便于调试
-        renderCanvas.style.backgroundColor = 'white'; // 白色背景
-        
-        addConsoleOutput('✅ 画布样式已强制设置', 'info');
-
-        
-        // 分析用户代码的绘制意图，选择合适的渲染模式
-        let drawType = 0; // 默认示例
-        
-        // 根据用户代码中的API调用来决定渲染类型
-        const hasRect = tgfxCalls.some(call => call.type === 'drawRect');
-        const hasCircle = tgfxCalls.some(call => call.type === 'drawCircle');
-        const hasText = tgfxCalls.some(call => call.type === 'drawText');
-        const hasGradient = tgfxCalls.some(call => call.type === 'gradient');
-        
-        if (hasGradient) {
-            drawType = 3; // 渐变效果
-        } else if (hasText) {
-            drawType = 1; // 文本渲染
-        } else if (hasCircle) {
-            drawType = 2; // 圆形绘制
-        } else if (hasRect) {
-            drawType = 0; // 矩形绘制
-        }
-        
-        addConsoleOutput(`选择渲染模式: ${drawType} (基于检测到的API调用)`, 'info');
-
-        // 尝试多个渲染参数来找到有效果的
-        let result = false;
-        const testParams = [
-            [1, 1.0, 0, 0],  // 尝试参数1
-            [2, 1.0, 0, 0],  // 尝试参数2  
-            [3, 1.0, 0, 0],  // 尝试参数3
-            [drawType, 1.0, 0, 0]  // 原始参数
-        ];
-        
-        for (let i = 0; i < testParams.length; i++) {
-            const params = testParams[i];
-            addConsoleOutput(`🎨 尝试渲染参数 ${i+1}: tgfxView.draw(${params.join(', ')})...`, 'info');
-            
-            try {
-                result = tgfxView.draw(...params);
-                addConsoleOutput(`参数 ${i+1} 返回: ${result}`, 'info');
-                
-                if (result) {
-                    addConsoleOutput(`✅ 参数 ${i+1} 渲染成功！`, 'success');
-        // TGFX渲染完成 - 不再使用备用方案
-
-                    
-                    // 强制刷新和显示
-                    try {
-                        // 1. 调用所有可能的刷新方法
-                        if (tgfxView.flush) {
-                            tgfxView.flush();
-                            addConsoleOutput('✅ 已调用 tgfxView.flush()', 'info');
-                        }
-                        if (tgfxView.present) {
-                            tgfxView.present();
-                            addConsoleOutput('✅ 已调用 tgfxView.present()', 'info');
-                        }
-                        if (tgfxView.swapBuffers) {
-                            tgfxView.swapBuffers();
-                            addConsoleOutput('✅ 已调用 tgfxView.swapBuffers()', 'info');
-                        }
-                        
-                        // 2. 强制WebGL刷新
-                        if (glContext) {
-                            glContext.flush();
-                            glContext.finish();
-                            addConsoleOutput('✅ 已强制WebGL刷新', 'info');
-                        }
-                        
-                        // 3. 更新画布
-                        updateCanvasSize();
-                        addConsoleOutput('✅ 已更新画布大小', 'info');
-                        
-                        // 4. 设置画布可见性和测试绘制
-                        if (renderCanvas) {
-                            renderCanvas.style.border = '3px solid lime';
-                            renderCanvas.style.backgroundColor = '#f0f0f0';
-                            addConsoleOutput(`✅ 画布尺寸: ${renderCanvas.width}x${renderCanvas.height}`, 'info');
-                            
-                            // 仅使用TGFX渲染，不进行Canvas 2D测试
-                        }
-                        
-                        // 5. 尝试调用Hello2D的其他可能方法
-                        if (tgfxView) {
-                            const methods = Object.getOwnPropertyNames(tgfxView);
-                            addConsoleOutput(`tgfxView可用方法: ${methods.join(', ')}`, 'info');
-                            
-                            // 尝试其他可能的渲染方法
-                            if (tgfxView.render) {
-                                tgfxView.render();
-                                addConsoleOutput('✅ 已调用 tgfxView.render()', 'info');
-                            }
-                            if (tgfxView.invalidate) {
-                                tgfxView.invalidate();
-                                addConsoleOutput('✅ 已调用 tgfxView.invalidate()', 'info');
-                            }
-                        }
-                        
-                    } catch (refreshError) {
-                        addConsoleOutput('⚠️ 刷新过程出错: ' + refreshError.message, 'warning');
-                    }
-                    
-                    break;
-                }
-            } catch (drawError) {
-                addConsoleOutput(`参数 ${i+1} 出错: ${drawError.message}`, 'warning');
+        // 🎯 核心：开始自定义绘制模式（直接调用TGFX API）
+        if (tgfxView.beginCustomDraw && typeof tgfxView.beginCustomDraw === 'function') {
+            const beginSuccess = tgfxView.beginCustomDraw();
+            if (!beginSuccess) {
+                throw new Error('无法开始自定义绘制模式');
             }
-        }
-        addConsoleOutput(`draw调用返回: ${result}`, 'info');
-        
-        // 强制刷新画布
-        if (tgfxView.flush) {
-            tgfxView.flush();
-            addConsoleOutput('已调用 tgfxView.flush()', 'info');
-        }
-        
-        // 更新画布大小
-        updateCanvasSize();
-        
-        if (result !== false) {
-            addConsoleOutput('✅ TGFX渲染执行成功', 'success');
+            addConsoleOutput('✅ 已进入TGFX自定义绘制模式', 'success');
+            
+            // 🎯 逐一执行解析出的TGFX调用（真正的API）
+            let currentPaint = null;
+            let currentPath = null;
+            
+            for (const call of tgfxCalls) {
+                addConsoleOutput(`执行TGFX API: ${call.type}`, 'info');
+                
+                switch (call.type) {
+                    case 'clear':
+                        const color = parseColorFromCall(call);
+                        tgfxView.clearCanvas(color.r, color.g, color.b, color.a);
+                        addConsoleOutput(`✅ canvas->clear() 执行完成`, 'success');
+                        break;
+                        
+                    case 'createPaint':
+                        currentPaint = tgfxView.createPaint();
+                        addConsoleOutput(`✅ Paint对象创建完成，ID: ${currentPaint}`, 'success');
+                        break;
+                        
+                    case 'setColor':
+                        if (currentPaint !== null) {
+                            const color = parseColorFromCall(call);
+                            tgfxView.setPaintColor(currentPaint, color.r, color.g, color.b, color.a);
+                            addConsoleOutput(`✅ paint.setColor() 执行完成`, 'success');
+                        }
+                        break;
+                        
+                    case 'drawRect':
+                        const rect = parseRectFromCall(call);
+                        if (currentPaint !== null) {
+                            tgfxView.drawRectWithPaint(rect.x, rect.y, rect.width, rect.height, currentPaint);
+                        } else {
+                            // 使用默认颜色
+                            tgfxView.drawRect(rect.x, rect.y, rect.width, rect.height, 1.0, 0.0, 0.0, 1.0);
+                        }
+                        addConsoleOutput(`✅ canvas->drawRect() 执行完成`, 'success');
+                        break;
+                        
+                    case 'drawCircle':
+                        const circle = parseCircleFromCall(call);
+                        tgfxView.drawCircle(circle.x, circle.y, circle.radius, 0.0, 0.0, 1.0, 1.0);
+                        addConsoleOutput(`✅ canvas->drawCircle() 执行完成`, 'success');
+                        break;
+                        
+                    case 'save':
+                        tgfxView.save();
+                        addConsoleOutput(`✅ canvas->save() 执行完成`, 'success');
+                        break;
+                        
+                    case 'restore':
+                        tgfxView.restore();
+                        addConsoleOutput(`✅ canvas->restore() 执行完成`, 'success');
+                        break;
+                        
+                    default:
+                        addConsoleOutput(`⚠️ 未支持的TGFX API: ${call.type}`, 'warning');
+                }
+            }
+            
+            // 🎯 核心：结束自定义绘制并刷新到屏幕
+            const endSuccess = tgfxView.endCustomDraw();
+            if (endSuccess) {
+                addConsoleOutput('✅ TGFX渲染完成并已刷新到WebGL', 'success');
+            } else {
+                addConsoleOutput('⚠️ 渲染刷新可能未完全成功', 'warning');
+            }
+            
+            return true;
+            
         } else {
-            addConsoleOutput('⚠️ TGFX渲染可能未完全成功', 'warning');
+            // 如果扩展API不可用，则报错
+            throw new Error('扩展TGFX API不可用，无法执行用户代码。请确保TGFXExtendedView已正确绑定。');
         }
-        
-        return true;
         
     } catch (error) {
         addConsoleOutput('❌ TGFX代码执行失败: ' + error.message, 'error');
         throw error;
     }
 }
+
+// 🎯 辅助函数：解析颜色
+function parseColorFromCall(call) {
+    if (call.match && call.match[1]) {
+        const colorName = call.match[1].toLowerCase();
+        switch (colorName) {
+            case 'white': return { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
+            case 'black': return { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
+            case 'red': return { r: 1.0, g: 0.0, b: 0.0, a: 1.0 };
+            case 'green': return { r: 0.0, g: 1.0, b: 0.0, a: 1.0 };
+            case 'blue': return { r: 0.0, g: 0.0, b: 1.0, a: 1.0 };
+            default: return { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
+        }
+    }
+    return { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
+}
+
+// 🎯 辅助函数：解析矩形参数
+function parseRectFromCall(call) {
+    if (call.match && call.match.length >= 5) {
+        return {
+            x: parseFloat(call.match[1]) || 0,
+            y: parseFloat(call.match[2]) || 0,
+            width: parseFloat(call.match[3]) || 100,
+            height: parseFloat(call.match[4]) || 100
+        };
+    }
+    return { x: 50, y: 50, width: 200, height: 100 };
+}
+
+// 🎯 辅助函数：解析圆形参数
+function parseCircleFromCall(call) {
+    return { x: 300, y: 100, radius: 50 };
+}
+
+// Hello2D降级方案已移除 - 现在仅支持扩展TGFX API
 
 // 更新画布大小
 function updateCanvasSize() {
@@ -2795,88 +2721,12 @@ function updateCanvasSize() {
     }
 }
 
-// 使用真实TGFX绘制
-function drawWithTGFX(drawIndex = 0) {
-    if (tgfxView && tgfxView.draw) {
-        try {
-            // 如果是用户代码模式，不要覆盖用户的渲染结果
-            if (currentDrawIndex === -1) {
-                return true; // 假装成功，但不实际绘制
-            }
-            // 如果是用户代码模式，不要覆盖用户的渲染结果
-            if (currentDrawIndex === -1) {
-                return true; // 假装成功，但不实际绘制
-            }
-            
-            // 确保画布可见
-            renderCanvas.style.display = 'block';
-            renderCanvas.style.border = '2px solid blue';
-            
-            // 更新画布大小
-            updateCanvasSize();
-            
-            // 执行绘制
-            const result = tgfxView.draw(drawIndex, 1.0, 0, 0);
-            
-            // 强制刷新
-            if (result) {
-                // 尝试调用其他可能的刷新方法
-                for (const method of ['flush', 'present', 'update']) {
-                    if (typeof tgfxView[method] === 'function') {
-                        tgfxView[method]();
-                    }
-                }
-                
-                // 强制WebGL刷新
-                const ctx = renderCanvas.getContext('webgl') || renderCanvas.getContext('webgl2');
-                if (ctx) {
-                    ctx.flush();
-                    ctx.finish();
-                }
-                
-                // 强制浏览器重绘
-                renderCanvas.style.opacity = '0.99';
-                setTimeout(() => {
-                    renderCanvas.style.opacity = '1';
-                }, 0);
-            }
+// Hello2D预设绘制功能已移除 - 现在仅支持用户自定义TGFX代码
 
-            return result;
-        } catch (e) {
-            addConsoleOutput('TGFX绘制失败: ' + e.message, 'error');
-            return false;
-        }
-    }
-    return false;
-}
-
-// 切换绘制示例
-function switchDrawer(index) {
-    currentDrawIndex = index;
-    
-    // 更新按钮状态
-    document.querySelectorAll('.drawer-btn').forEach((btn, i) => {
-        btn.classList.toggle('active', i === index);
-    });
-    
-    if (isRealTGFX) {
-        drawWithTGFX(index);
-    } else {
-        // 直接使用TGFX绘制示例
-        if (tgfxView && tgfxView.draw) {
-            tgfxView.draw(index, 1.0, 0, 0);
-            addConsoleOutput(`切换到TGFX示例 ${index}`, 'success');
-        } else {
-            addConsoleOutput('❌ TGFX视图不可用', 'error');
-        }
-    }
-    
-    addConsoleOutput(`切换到示例 ${index}`, 'info');
-}
+// Hello2D示例切换功能已移除 - 现在仅使用用户自定义TGFX代码
 
 // 导出函数供全局使用
 window.clearConsole = clearConsole;
-window.switchDrawer = switchDrawer;
         // TGFX 在线编译器 - 编译功能和初始化
 
 // 真实的C++编译和执行功能
@@ -3155,8 +3005,7 @@ async function initSystem() {
             
             addConsoleOutput('✅ 系统初始化完成，可以编译运行C++代码!', 'success');
             
-            // 初始化画布渲染
-            drawWithTGFX(0);
+            // 画布已就绪，等待用户编译C++代码
             
         } else {
             throw new Error('clang.js 初始化失败');
@@ -3235,18 +3084,8 @@ function clearCanvas() {
 // 窗口大小改变处理
 function handleResize() {
     updateCanvasSize();
-    
-    // 重新绘制当前示例
-    if (isRealTGFX) {
-        drawWithTGFX(currentDrawIndex);
-    } else {
-        if (tgfxView && tgfxView.draw) {
-            tgfxView.draw(currentDrawIndex, 1.0, 0, 0);
-            addConsoleOutput(`切换到TGFX示例 ${currentDrawIndex}`, 'success');
-        } else {
-            addConsoleOutput('❌ TGFX视图不可用', 'error');
-        }
-    }
+    // 窗口大小变化后，用户需要重新编译代码才能看到正确的渲染结果
+    addConsoleOutput('📐 窗口大小已更改，请重新编译代码以适应新尺寸', 'info');
 }
 
 // 代码示例管理
@@ -3427,8 +3266,8 @@ window.executeUserDrawing = function(tgfxView) {
                 }
             }
             
-            // 执行一个基础的绘制来显示用户意图
-            return tgfxView.draw(0, 1.0, 0, 0);
+            // 用户绘图指令已解析，等待扩展TGFX API执行
+            return true;
         }
         
         addConsoleOutput('未找到用户绘图指令，使用默认渲染', 'warning');
@@ -3670,37 +3509,7 @@ initSystem().catch(error => {
     console.error('系统初始化失败:', error);
 });
     
-// 添加自动重绘机制
-function setupAutoRedraw() {
-    // 每秒尝试重绘一次
-    window.autoRedrawInterval = setInterval(() => {
-        if (isRealTGFX && tgfxView && tgfxView.draw && currentDrawIndex >= 0) {
-            // 只有在非用户代码模式下才自动重绘示例
-            try {
-                tgfxView.draw(currentDrawIndex, 1.0, 0, 0);
-                
-                // 强制刷新
-                if (typeof tgfxView.flush === 'function') {
-                    tgfxView.flush();
-                }
-                
-                // 强制WebGL刷新
-                const ctx = renderCanvas.getContext('webgl') || renderCanvas.getContext('webgl2');
-                if (ctx) {
-                    ctx.flush();
-                    ctx.finish();
-                }
-            } catch (e) {
-                console.error('自动重绘失败:', e);
-            }
-        }
-    }, 1000);
-}
-
-// 在初始化完成后设置自动重绘
-window.addEventListener('load', () => {
-    setTimeout(setupAutoRedraw, 2000);
-});
+// Hello2D自动重绘机制已移除 - 现在仅在用户编译代码时进行渲染
 
 </script>
 </body>
