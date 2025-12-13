@@ -32,6 +32,14 @@ std::shared_ptr<tgfx::Image> AppHost::getImage(const std::string& name) const {
   return nullptr;
 }
 
+std::shared_ptr<tgfx::Data> AppHost::getSVGData(const std::string& name) const {
+  auto result = svgs.find(name);
+  if (result != svgs.end()) {
+    return result->second;
+  }
+  return nullptr;
+}
+
 std::shared_ptr<tgfx::Typeface> AppHost::getTypeface(const std::string& name) const {
   auto result = typefaces.find(name);
   if (result != typefaces.end()) {
@@ -81,6 +89,22 @@ void AppHost::addImage(const std::string& name, std::shared_ptr<tgfx::Image> ima
     return;
   }
   images[name] = std::move(image);
+}
+
+void AppHost::addSVGData(const std::string& name, std::shared_ptr<tgfx::Data> data) {
+  if (name.empty()) {
+    tgfx::PrintError("AppHost::addSVGData() svg data is empty!");
+    return;
+  }
+  if (data == nullptr) {
+    tgfx::PrintError("AppHost::addSVGData() svg data is nullptr!");
+    return;
+  }
+  if (svgs.count(name) > 0) {
+    tgfx::PrintError("AppHost::addSVGData() svg data with name %s already exists!", name.c_str());
+    return;
+  }
+  svgs[name] = std::move(data);
 }
 
 void AppHost::addTypeface(const std::string& name, std::shared_ptr<tgfx::Typeface> typeface) {

@@ -2,7 +2,7 @@
 //
 //  Tencent is pleased to support the open source community by making tgfx available.
 //
-//  Copyright (C) 2024 Tencent. All rights reserved.
+//  Copyright (C) 2025 Tencent. All rights reserved.
 //
 //  Licensed under the BSD 3-Clause License (the "License"); you may not use this file except
 //  in compliance with the License. You may obtain a copy of the License at
@@ -16,32 +16,22 @@
 //
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "drawers/Drawer.h"
-#include "tgfx/layers/DisplayList.h"
+#ifdef TGFX_BUILD_SVG
 
 #pragma once
 
+#include "base/LayerTreeDrawer.h"
+
 namespace drawers {
 
-class LayerTreeDrawer : public Drawer {
+class SVGLayerTree : public drawers::LayerTreeDrawer {
  public:
-  LayerTreeDrawer(const std::string& treeName);
-
-  std::vector<std::shared_ptr<tgfx::Layer>> getLayersUnderPoint(float x, float y) const;
-
- protected:
-  virtual std::shared_ptr<tgfx::Layer> buildLayerTree(const AppHost* host) = 0;
-
-  void onDraw(tgfx::Canvas* canvas, const AppHost* host) override;
-
- private:
-  void updateRootMatrix(const AppHost* host);
-
-  // used to update matrix
-  std::shared_ptr<tgfx::Layer> root = nullptr;
+  SVGLayerTree() : LayerTreeDrawer("SVGLayerTree") {
+  }
 
  protected:
-  tgfx::DisplayList displayList = {};
+  std::shared_ptr<tgfx::Layer> buildLayerTree(const AppHost* host) override;
 };
 
 }  // namespace drawers
+#endif

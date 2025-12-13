@@ -80,6 +80,11 @@ class AppHost {
   std::shared_ptr<tgfx::Image> getImage(const std::string& name) const;
 
   /**
+     * Returns an svg data with the given name.
+     */
+  std::shared_ptr<tgfx::Data> getSVGData(const std::string& name) const;
+
+  /**
    * Returns a typeface with the given name.
    */
   std::shared_ptr<tgfx::Typeface> getTypeface(const std::string& name) const;
@@ -102,6 +107,11 @@ class AppHost {
   void addImage(const std::string& name, std::shared_ptr<tgfx::Image> image);
 
   /**
+     * Add an svg data for the given resource name.
+     */
+  void addSVGData(const std::string& name, std::shared_ptr<tgfx::Data> data);
+
+  /**
    * Adds a typeface for the given resource name.
    */
   void addTypeface(const std::string& name, std::shared_ptr<tgfx::Typeface> typeface);
@@ -113,6 +123,7 @@ class AppHost {
   float _zoomScale = 1.0f;
   tgfx::Point _contentOffset = {};
   std::unordered_map<std::string, std::shared_ptr<tgfx::Image>> images = {};
+  std::unordered_map<std::string, std::shared_ptr<tgfx::Data>> svgs = {};
   std::unordered_map<std::string, std::shared_ptr<tgfx::Typeface>> typefaces = {};
 };
 }  // namespace drawers

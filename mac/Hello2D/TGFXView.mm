@@ -20,6 +20,7 @@
 #import <QuartzCore/CADisplayLink.h>
 #include <cmath>
 #include "drawers/Drawer.h"
+#include "drawers/TimeProfile.h"
 #include "tgfx/core/Point.h"
 
 static CVReturn OnDisplayLinkCallback(CVDisplayLinkRef, const CVTimeStamp*, const CVTimeStamp*,
@@ -63,6 +64,9 @@ static CVReturn OnDisplayLinkCallback(CVDisplayLinkRef, const CVTimeStamp*, cons
     NSString* imagePath = [[NSBundle mainBundle] pathForResource:@"bridge" ofType:@"jpg"];
     auto image = tgfx::Image::MakeFromFile(imagePath.UTF8String);
     appHost->addImage("bridge", image);
+    NSString* svgPath = [[NSBundle mainBundle] pathForResource:@"basemap" ofType:@"svg"];
+    auto data = tgfx::Data::MakeFromFile(svgPath.UTF8String);
+    appHost->addSVGData("default", std::move(data));
     auto typeface = tgfx::Typeface::MakeFromName("PingFang SC", "");
     appHost->addTypeface("default", typeface);
     typeface = tgfx::Typeface::MakeFromName("Apple Color Emoji", "");
@@ -157,16 +161,34 @@ static CVReturn OnDisplayLinkCallback(CVDisplayLinkRef, const CVTimeStamp*, cons
   }
   appHost->updateZoomAndOffset(self.zoomScale,
                                tgfx::Point(self.contentOffset.x, self.contentOffset.y));
+
+  PROFILE_GROUP_START(group, "Draw Frame");
+  PROFILE_GROUP_SET_THRESHOLD(group, 16.7);
+
   auto canvas = surface->getCanvas();
   canvas->clear();
+  PROFILE_STAGE_START(group, draw, "Draw");
   auto numDrawers = drawers::Drawer::Count() - 1;
   int index = (self.drawIndex % numDrawers) + 1;
   auto drawer = drawers::Drawer::GetByName("GridBackground");
   drawer->draw(canvas, appHost.get());
   drawer = drawers::Drawer::GetByIndex(index);
   drawer->draw(canvas, appHost.get());
-  context->flushAndSubmit();
+  PROFILE_STAGE_END(group, draw);
+
+  PROFILE_STAGE_START(group, flush, "Flush");
+  auto recording = context->flush();
+  PROFILE_STAGE_END(group, flush);
+
+  if (recording) {
+    PROFILE_STAGE_START(group, Submit, "Submit");
+    context->submit(std::move(recording));
+    PROFILE_STAGE_END(group, Submit);
+  }
+
+  PROFILE_STAGE_START(group, present, "Present");
   tgfxWindow->present(context);
+  PROFILE_STAGE_END(group, present);
   device->unlock();
 }
 

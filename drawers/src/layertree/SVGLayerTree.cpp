@@ -2,7 +2,7 @@
 //
 //  Tencent is pleased to support the open source community by making tgfx available.
 //
-//  Copyright (C) 2024 Tencent. All rights reserved.
+//  Copyright (C) 2025 Tencent. All rights reserved.
 //
 //  Licensed under the BSD 3-Clause License (the "License"); you may not use this file except
 //  in compliance with the License. You may obtain a copy of the License at
@@ -16,32 +16,35 @@
 //
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "drawers/Drawer.h"
-#include "tgfx/layers/DisplayList.h"
+#ifdef TGFX_BUILD_SVG
 
-#pragma once
-
+#include "SVGLayerTree.h"
+#include <tgfx/svg/SVGDOM.h>
+#include "SVGConvertLayer.h"
 namespace drawers {
+std::shared_ptr<tgfx::Layer> SVGLayerTree::buildLayerTree(const AppHost* host) {
+  auto root = tgfx::Layer::Make();
+  auto data = host->getSVGData("default");
+  if (!data) {
+    return root;
+  }
 
-class LayerTreeDrawer : public Drawer {
- public:
-  LayerTreeDrawer(const std::string& treeName);
+  auto stream = tgfx::Stream::MakeFromData(data);
+  auto dom = tgfx::SVGDOM::Make(*stream);
+  if (!dom) {
+    return root;
+  }
 
-  std::vector<std::shared_ptr<tgfx::Layer>> getLayersUnderPoint(float x, float y) const;
+  auto typeface = host->getTypeface("default");
+  auto result = convertSVGDomToLayer(dom, typeface);
+  if (!result) {
+    return root;
+  }
 
- protected:
-  virtual std::shared_ptr<tgfx::Layer> buildLayerTree(const AppHost* host) = 0;
-
-  void onDraw(tgfx::Canvas* canvas, const AppHost* host) override;
-
- private:
-  void updateRootMatrix(const AppHost* host);
-
-  // used to update matrix
-  std::shared_ptr<tgfx::Layer> root = nullptr;
-
- protected:
-  tgfx::DisplayList displayList = {};
-};
-
+  auto [layer, size] = result.value();
+  (void)size;
+  root->addChild(layer);
+  return root;
+}
 }  // namespace drawers
+#endif

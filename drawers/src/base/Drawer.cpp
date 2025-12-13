@@ -20,13 +20,18 @@
 #include <unordered_map>
 #include "LayerTreeDrawers.h"
 #include "base/Drawers.h"
+#include "layertree/SVGLayerTree.h"
 #include "layertree/SimpleLayerTree.h"
 #include "tgfx/platform/Print.h"
 
 namespace drawers {
-static std::vector<Drawer*> drawers = {
-    new GridBackground(), new ConicGradient(),   new ImageWithMipmap(), new ImageWithShadow(),
-    new SimpleText(),     new SimpleLayerTree(), new CustomLayerTree()};
+static std::vector<Drawer*> drawers = {new GridBackground(),
+#ifdef TGFX_BUILD_SVG
+                                       new SVGLayerTree(),
+#endif
+                                       new ConicGradient(),   new ImageWithMipmap(),
+                                       new ImageWithShadow(), new SimpleText(),
+                                       new SimpleLayerTree(), new CustomLayerTree()};
 
 static std::vector<std::string> GetDrawerNames() {
   std::vector<std::string> names;
