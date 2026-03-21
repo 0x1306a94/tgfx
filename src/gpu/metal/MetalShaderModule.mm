@@ -155,7 +155,7 @@ static std::string preprocessGLSL(const std::string& glslCode) {
 
 // Compile GLSL source to SPIR-V binary.
 static std::vector<uint32_t> compileGLSLToSPIRV(const std::string& glslCode, ShaderStage stage) {
-  shaderc::Compiler compiler;
+  thread_local shaderc::Compiler compiler;
   shaderc::CompileOptions options;
   options.SetOptimizationLevel(shaderc_optimization_level_performance);
   options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_0);
