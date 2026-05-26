@@ -107,6 +107,13 @@ void GLRenderPipeline::setTexture(GLGPU* gpu, unsigned binding, GLTexture* textu
   }
 }
 
+#if defined(__EMSCRIPTEN__)
+static bool IsIntegerGLType(unsigned type) {
+  return type == GL_INT || type == GL_UNSIGNED_INT || type == GL_BYTE || type == GL_UNSIGNED_BYTE ||
+         type == GL_SHORT || type == GL_UNSIGNED_SHORT;
+}
+#endif
+
 void GLRenderPipeline::setVertexBuffer(GLGPU* gpu, unsigned slot, GLBuffer* buffer, size_t offset) {
   DEBUG_ASSERT(slot < bufferLayouts.size());
   if (slot >= bufferLayouts.size()) {
@@ -120,9 +127,22 @@ void GLRenderPipeline::setVertexBuffer(GLGPU* gpu, unsigned slot, GLBuffer* buff
   gl->bindBuffer(GL_ARRAY_BUFFER, buffer->bufferID());
   const auto& layout = bufferLayouts[slot];
   for (auto& attribute : layout.attributes) {
+#if defined(__EMSCRIPTEN__)
+    // WebGL requires vertexAttribIPointer for integer vertex attributes.
+    if (!attribute.normalized && IsIntegerGLType(attribute.type)) {
+      gl->vertexAttribIPointer(static_cast<unsigned>(attribute.location), attribute.count,
+                               attribute.type, static_cast<int>(layout.stride),
+                               reinterpret_cast<void*>(attribute.offset + offset));
+    } else {
+      gl->vertexAttribPointer(static_cast<unsigned>(attribute.location), attribute.count,
+                              attribute.type, attribute.normalized, static_cast<int>(layout.stride),
+                              reinterpret_cast<void*>(attribute.offset + offset));
+    }
+#else
     gl->vertexAttribPointer(static_cast<unsigned>(attribute.location), attribute.count,
                             attribute.type, attribute.normalized, static_cast<int>(layout.stride),
                             reinterpret_cast<void*>(attribute.offset + offset));
+#endif
   }
 }
 

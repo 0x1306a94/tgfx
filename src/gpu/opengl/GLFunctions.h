@@ -171,6 +171,8 @@ using GLVertexAttribDivisor = void GL_FUNCTION_TYPE(unsigned index, int divisor)
 using GLViewport = void GL_FUNCTION_TYPE(int x, int y, int width, int height);
 
 #if defined(__EMSCRIPTEN__)
+using GLVertexAttribIPointer = void GL_FUNCTION_TYPE(unsigned indx, int size, unsigned type,
+                                                     int stride, const void* ptr);
 using GLClientWaitSync = unsigned GL_FUNCTION_TYPE(void* sync, unsigned flags, unsigned timeoutLo,
                                                    unsigned timeoutHi);
 using GLWaitSync = void GL_FUNCTION_TYPE(void* sync, unsigned flags, unsigned timeoutLo,
@@ -281,6 +283,9 @@ class GLFunctions {
   GLUniform1i* uniform1i = nullptr;
   GLUseProgram* useProgram = nullptr;
   GLVertexAttribPointer* vertexAttribPointer = nullptr;
+#if defined(__EMSCRIPTEN__)
+  GLVertexAttribIPointer* vertexAttribIPointer = nullptr;
+#endif
   GLVertexAttribDivisor* vertexAttribDivisor = nullptr;
   GLViewport* viewport = nullptr;
   GLClientWaitSync* clientWaitSync = nullptr;

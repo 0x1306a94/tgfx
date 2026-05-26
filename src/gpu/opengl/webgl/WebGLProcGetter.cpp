@@ -34,6 +34,7 @@ void* WebGLProcGetter::getProcAddress(const char* name) const {
   M(glBindVertexArrayOES)
   M(glDeleteVertexArraysOES)
   M(glGenVertexArraysOES)
+  M(glVertexAttribIPointer)
 
 #undef M
 
